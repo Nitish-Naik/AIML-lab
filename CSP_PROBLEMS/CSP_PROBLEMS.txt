@@ -1,0 +1,7 @@
+Here are some examples of constraint satisfaction problems (CSPs): 
+Cryptarithmetic: Coding alphabets to numbers 
+n-Queen: Placing n queens in an nXn matrix so that no queen shares a row, column, or diagonal 
+Map coloring: Coloring different regions of a map so that no adjacent regions have the same color 
+Crossword: Everyday puzzles that appear in newspapers 
+Sudoku: A number grid 
+Latin square problem: A problem that can be solved using CSP 
