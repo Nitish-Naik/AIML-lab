@@ -1,0 +1,213 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import json
+import datetime
+import os
+from abc import ABC, abstractmethod
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import pyautogui
+import pandas as pd
+
+class SocialMediaPlatform(ABC):
+    def __init__(self):
+        self.driver = None
+        self.data = {}
+    
+    @abstractmethod
+    def authenticate(self, credentials):
+        pass
+    
+    @abstractmethod
+    def extract_data(self, data_types):
+        pass
+    
+    @abstractmethod
+    def capture_screenshots(self, elements):
+        pass
+    
+    def generate_report(self):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        report = {
+            "timestamp": timestamp,
+            "platform": self.__class__.__name__,
+            "data": self.data,
+            "screenshots": self.screenshots
+        }
+        return report
+
+class FacebookPlatform(SocialMediaPlatform):
+    def authenticate(self, credentials):
+        try:
+            self.driver = webdriver.Chrome()  # You'll need chromedriver installed
+            self.driver.get("https://www.facebook.com")
+            
+            email_field = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.ID, "email"))
+            )
+            password_field = self.driver.find_element(By.ID, "pass")
+            
+            email_field.send_keys(credentials['email'])
+            password_field.send_keys(credentials['password'])
+            
+            login_button = self.driver.find_element(By.NAME, "login")
+            login_button.click()
+            
+            # Wait for homepage to load
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "[aria-label='Home']"))
+            )
+            return True
+        except Exception as e:
+            print(f"Authentication failed: {str(e)}")
+            return False
+
+    def extract_data(self, data_types):
+        self.data = {}
+        try:
+            for data_type in data_types:
+                if data_type == 'profile':
+                    self.extract_profile_info()
+                elif data_type == 'friends':
+                    self.extract_friends_list()
+                elif data_type == 'posts':
+                    self.extract_posts()
+        except Exception as e:
+            print(f"Data extraction failed: {str(e)}")
+
+    def capture_screenshots(self, elements):
+        self.screenshots = {}
+        try:
+            for element_name, css_selector in elements.items():
+                element = self.driver.find_element(By.CSS_SELECTOR, css_selector)
+                screenshot = element.screenshot_as_png
+                self.screenshots[element_name] = screenshot
+        except Exception as e:
+            print(f"Screenshot capture failed: {str(e)}")
+
+    def extract_profile_info(self):
+        # Implementation for extracting profile info
+        pass
+
+    def extract_friends_list(self):
+        # Implementation for extracting friends list
+        pass
+
+    def extract_posts(self):
+        # Implementation for extracting posts
+        pass
+
+class ReportGenerator:
+    def __init__(self):
+        self.report_dir = "investigation_reports"
+        os.makedirs(self.report_dir, exist_ok=True)
+
+    def generate_report(self, platform_data):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = os.path.join(self.report_dir, f"report_{timestamp}")
+        os.makedirs(report_path, exist_ok=True)
+
+        # Save JSON data
+        with open(os.path.join(report_path, "data.json"), "w") as f:
+            json.dump(platform_data.data, f, indent=4)
+
+        # Save screenshots
+        screenshots_dir = os.path.join(report_path, "screenshots")
+        os.makedirs(screenshots_dir, exist_ok=True)
+        for name, screenshot in platform_data.screenshots.items():
+            with open(os.path.join(screenshots_dir, f"{name}.png"), "wb") as f:
+                f.write(screenshot)
+
+        # Generate HTML report
+        self.generate_html_report(report_path, platform_data)
+
+    def generate_html_report(self, report_path, platform_data):
+        html_content = f"""
+        <html>
+        <head>
+            <title>Investigation Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; }}
+                .container {{ max-width: 800px; margin: 0 auto; padding: 20px; }}
+                .screenshot {{ margin: 20px 0; }}
+                .screenshot img {{ max-width: 100%; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Social Media Investigation Report</h1>
+                <h2>Platform: {platform_data.__class__.__name__}</h2>
+                <h3>Data Extracted:</h3>
+                <pre>{json.dumps(platform_data.data, indent=4)}</pre>
+                <h3>Screenshots:</h3>
+                {''.join(f'<div class="screenshot"><h4>{name}</h4><img src="screenshots/{name}.png"></div>' for name in platform_data.screenshots)}
+            </div>
+        </body>
+        </html>
+        """
+        with open(os.path.join(report_path, "report.html"), "w") as f:
+            f.write(html_content)
+
+class Application(tk.Tk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("Social Media Parser")
+        self.geometry("800x600")
+
+        self.platform_var = tk.StringVar()
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Platform selection
+        ttk.Label(self, text="Select Platform:").pack(pady=5)
+        platforms = ['Facebook', 'Twitter', 'Instagram']
+        for platform in platforms:
+            ttk.Radiobutton(self, text=platform, variable=self.platform_var, value=platform).pack()
+
+        # Credentials
+        credentials_frame = ttk.LabelFrame(self, text="Credentials", padding=10)
+        credentials_frame.pack(pady=10, padx=10, fill="x")
+
+        ttk.Label(credentials_frame, text="Email:").grid(row=0, column=0, sticky="w")
+        self.email_entry = ttk.Entry(credentials_frame)
+        self.email_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(credentials_frame, text="Password:").grid(row=1, column=0, sticky="w")
+        self.password_entry = ttk.Entry(credentials_frame, show="*")
+        self.password_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        # Data type selection
+        data_frame = ttk.LabelFrame(self, text="Select Data to Extract", padding=10)
+        data_frame.pack(pady=10, padx=10, fill="x")
+
+        self.data_vars = {}
+        data_types = ['Profile Info', 'Friends List', 'Posts', 'Photos']
+        for i, data_type in enumerate(data_types):
+            self.data_vars[data_type] = tk.BooleanVar()
+            ttk.Checkbutton(data_frame, text=data_type, variable=self.data_vars[data_type]).grid(row=i//2, column=i%2, sticky="w")
+
+        # Start button
+        ttk.Button(self, text="Start Extraction", command=self.start_extraction).pack(pady=20)
+
+    def start_extraction(self):
+        platform = self.platform_var.get()
+        if not platform:
+            messagebox.showerror("Error", "Please select a platform")
+            return
+
+        credentials = {
+            "email": self.email_entry.get(),
+            "password": self.password_entry.get()
+        }
+
+        data_types = [dt for dt, var in self.data_vars.items() if var.get()]
+        
+        # This would actually start the extraction process
+        messagebox.showinfo("Started", f"Starting extraction for {platform}\nData types: {', '.join(data_types)}")
+
+if __name__ == "__main__":
+    app = Application()
+    app.mainloop()
